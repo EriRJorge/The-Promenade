@@ -262,34 +262,41 @@ function getLikeCount($postId) {
     return (int)$row['count'];
 }
 
-// Function to toggle follow/unfollow
-function toggleFollow($followerId, $followingId) {
+/**
+ * Function to toggle follow status between users
+ */
+function toggleFollow($followerId, $followedId) {
+    if ($followedId <= 0) {
+        return false;
+    }
+    
     $conn = getDbConnection();
-
-    // Check if the user is already following
-    $stmt = $conn->prepare("SELECT id FROM follows WHERE follower_id = ? AND following_id = ?");
-    $stmt->bind_param("ii", $followerId, $followingId);
+    
+    // Check if already following
+    $stmt = $conn->prepare("SELECT * FROM follows WHERE follower_id = ? AND followed_id = ?");
+    
+    if (!$stmt) {
+        // Debug: Print any SQL errors
+        error_log("MySQL Error: " . $conn->error);
+        return false;
+    }
+    
+    $stmt->bind_param("ii", $followerId, $followedId);
     $stmt->execute();
     $result = $stmt->get_result();
-
+    
     if ($result->num_rows > 0) {
-        // Unfollow the user
-        $stmt = $conn->prepare("DELETE FROM follows WHERE follower_id = ? AND following_id = ?");
-        $stmt->bind_param("ii", $followerId, $followingId);
-        if ($stmt->execute()) {
-            return ["success" => true, "message" => "Unfollowed successfully."];
-        } else {
-            return ["success" => false, "message" => "Failed to unfollow: " . $stmt->error];
-        }
+        // Unfollow
+        $stmt = $conn->prepare("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?");
+        $stmt->bind_param("ii", $followerId, $followedId);
+        $stmt->execute();
+        return false; // Indicates unfollowed
     } else {
-        // Follow the user
-        $stmt = $conn->prepare("INSERT INTO follows (follower_id, following_id, created_at) VALUES (?, ?, NOW())");
-        $stmt->bind_param("ii", $followerId, $followingId);
-        if ($stmt->execute()) {
-            return ["success" => true, "message" => "Followed successfully."];
-        } else {
-            return ["success" => false, "message" => "Failed to follow: " . $stmt->error];
-        }
+        // Follow
+        $stmt = $conn->prepare("INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)");
+        $stmt->bind_param("ii", $followerId, $followedId);
+        $stmt->execute();
+        return true; // Indicates followed
     }
 }
 
