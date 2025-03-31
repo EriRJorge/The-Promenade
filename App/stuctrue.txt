@@ -1,0 +1,27 @@
+The Promenade/
+├── config/
+│   └── database.php
+├── includes/
+│   ├── db.php
+│   ├── functions.php
+│   ├── auth.php
+│   └── session.php
+├── uploads/
+│   └── images/
+├── assets/
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       └── script.js
+├── index.php
+├── login.php
+├── register.php
+├── logout.php
+├── profile.php
+├── edit_profile.php
+├── post.php
+├── view_post.php
+├── follow.php
+├── like.php
+├── comment.php
+└── dashboard.php
