@@ -8,7 +8,21 @@ require_once __DIR__ . '/../config/database.php';
 
 // Define a function to get database connection
 function getDbConnection() {
-    global $conn;
+    static $conn = null;
+    if ($conn === null) {
+        try {
+            $conn = new mysqli('localhost', 'root', '', 'promenade'); // Adjust these values to match your setup
+            
+            if ($conn->connect_error) {
+                throw new Exception("Connection failed: " . $conn->connect_error);
+            }
+            
+            $conn->set_charset("utf8mb4");
+        } catch (Exception $e) {
+            error_log("Database connection error: " . $e->getMessage());
+            throw new Exception("Database connection failed");
+        }
+    }
     return $conn;
 }
 

@@ -74,45 +74,71 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     // Handle follow buttons
-    const followForms = document.querySelectorAll(".follow-form");
-    if (followForms) {
-        followForms.forEach(form => {
-            form.addEventListener("submit", async function(e) {
-                e.preventDefault();
+    const followButtons = document.querySelectorAll('.follow-btn');
+    if (followButtons) {
+        followButtons.forEach(button => {
+            button.addEventListener('click', async function() {
+                const userId = this.dataset.userId;
+                console.log('Following user ID:', userId); // Debug log
                 
-                const followingId = this.querySelector("input[name='following_id']").value;
-                const button = this.querySelector("button");
+                const originalText = this.textContent;
                 
                 try {
-                    const response = await fetch("follow.php", {
-                        method: "POST",
+                    // Disable button and show loading state
+                    this.disabled = true;
+                    this.textContent = 'Processing...';
+                    
+                    // Make the fetch request
+                    const response = await fetch('follow.php', {
+                        method: 'POST',
                         headers: {
-                            "Content-Type": "application/x-www-form-urlencoded",
+                            'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: `following_id=${followingId}`
+                        body: `user_id=${userId}`
                     });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        // Toggle button text and class
-                        if (button.textContent.trim() === "Follow") {
-                            button.textContent = "Unfollow";
-                            button.classList.remove("primary-button");
-                            button.classList.add("secondary-button");
-                        } else {
-                            button.textContent = "Follow";
-                            button.classList.remove("secondary-button");
-                            button.classList.add("primary-button");
-                        }
-                        
-                        // Reload the page to update stats
-                        location.reload();
-                    } else {
-                        alert(data.message);
+
+                    // Log the raw response for debugging
+                    const responseText = await response.text();
+                    console.log('Raw server response:', responseText);
+
+                    // Try to parse the response
+                    let data;
+                    try {
+                        data = JSON.parse(responseText);
+                        console.log('Parsed response:', data);
+                    } catch (e) {
+                        console.error('JSON Parse Error:', e);
+                        throw new Error('Invalid server response');
                     }
+
+                    if (!data.success) {
+                        throw new Error(data.error || 'Failed to process request');
+                    }
+
+                    // Update button state on success
+                    const isFollowing = data.data?.following ?? false;
+                    this.classList.toggle('following', isFollowing);
+                    this.textContent = isFollowing ? 'Following' : 'Follow';
+                    
                 } catch (error) {
-                    console.error("Error:", error);
+                    console.error('Error:', error);
+                    this.textContent = originalText;
+                    alert(error.message || 'An error occurred. Please try again.');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            // Hover states
+            button.addEventListener('mouseenter', function() {
+                if (this.classList.contains('following')) {
+                    this.textContent = 'Unfollow';
+                }
+            });
+
+            button.addEventListener('mouseleave', function() {
+                if (this.classList.contains('following')) {
+                    this.textContent = 'Following';
                 }
             });
         });
@@ -257,4 +283,15 @@ function showFeedback(message, type) {
         feedback.classList.remove('show');
         setTimeout(() => feedback.remove(), 300);
     }, 3000);
+}
+
+// Add this helper function for notifications
+function showNotification(message, type = 'info') {
+    // You can implement this however you want - alert, toast, etc.
+    if (type === 'error') {
+        alert(message); // For now, using simple alert
+    } else {
+        // Optional: implement a nicer notification system
+        console.log(message);
+    }
 }

@@ -106,24 +106,97 @@ function getPosts($limit = 10, $offset = 0, $userId = null) {
     return $posts;
 }
 
-// Function to get feed posts (from followed users and own posts)
+/**
+ * Get posts for user's feed
+ */
 function getFeedPosts($userId, $limit = 10, $offset = 0) {
     $conn = getDbConnection();
-    $currentDate = date('Y-m-d H:i:s');
     
-    $sql = "SELECT p.*, u.username, u.profile_pic, 
+    $sql = "SELECT p.*, u.username, u.profile_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
             (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
             (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as user_liked
             FROM posts p
             JOIN users u ON p.user_id = u.id
-            LEFT JOIN follows f ON p.user_id = f.following_id AND f.follower_id = ?
-            WHERE (f.id IS NOT NULL OR p.user_id = ?) AND p.expiry_date > ?
+            LEFT JOIN follows f ON p.user_id = f.followed_id
+            WHERE f.follower_id = ? OR p.user_id = ?
+            AND p.expiry_date > NOW()
+            GROUP BY p.id
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?";
     
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iiisii", $userId, $userId, $userId, $currentDate, $limit, $offset);
+    if (!$stmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
+    
+    $stmt->bind_param("iiiii", $userId, $userId, $userId, $limit, $offset);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $posts = [];
+    while ($row = $result->fetch_assoc()) {
+        $posts[] = $row;
+    }
+    
+    return $posts;
+}
+
+/**
+ * Get posts by user ID
+ */
+function getUserPosts($userId, $limit = 10, $offset = 0) {
+    $conn = getDbConnection();
+    
+    $sql = "SELECT p.*, u.username, u.profile_pic,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+            (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as user_liked
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.user_id = ? AND p.expiry_date > NOW()
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?";
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
+    
+    $stmt->bind_param("iiii", $userId, $userId, $limit, $offset);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $posts = [];
+    while ($row = $result->fetch_assoc()) {
+        $posts[] = $row;
+    }
+    
+    return $posts;
+}
+
+/**
+ * Get all posts (for admin or public feed)
+ */
+function getAllPosts($limit = 10, $offset = 0, $currentUserId = null) {
+    $conn = getDbConnection();
+    
+    $sql = "SELECT p.*, u.username, u.profile_pic,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+            (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as user_liked
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.expiry_date > NOW()
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?";
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
+    
+    $stmt->bind_param("iii", $currentUserId, $limit, $offset);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -266,37 +339,41 @@ function getLikeCount($postId) {
  * Function to toggle follow status between users
  */
 function toggleFollow($followerId, $followedId) {
-    if ($followedId <= 0) {
-        return false;
-    }
-    
-    $conn = getDbConnection();
-    
-    // Check if already following
-    $stmt = $conn->prepare("SELECT * FROM follows WHERE follower_id = ? AND followed_id = ?");
-    
-    if (!$stmt) {
-        // Debug: Print any SQL errors
-        error_log("MySQL Error: " . $conn->error);
-        return false;
-    }
-    
-    $stmt->bind_param("ii", $followerId, $followedId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        // Unfollow
-        $stmt = $conn->prepare("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?");
+    try {
+        $conn = getDbConnection();
+        
+        // Check if already following
+        $stmt = $conn->prepare("SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?");
+        if (!$stmt) {
+            throw new Exception($conn->error);
+        }
+        
         $stmt->bind_param("ii", $followerId, $followedId);
         $stmt->execute();
-        return false; // Indicates unfollowed
-    } else {
-        // Follow
-        $stmt = $conn->prepare("INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)");
-        $stmt->bind_param("ii", $followerId, $followedId);
-        $stmt->execute();
-        return true; // Indicates followed
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // Unfollow
+            $stmt = $conn->prepare("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?");
+            if (!$stmt) {
+                throw new Exception($conn->error);
+            }
+            $stmt->bind_param("ii", $followerId, $followedId);
+            $stmt->execute();
+            return false; // Not following anymore
+        } else {
+            // Follow
+            $stmt = $conn->prepare("INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)");
+            if (!$stmt) {
+                throw new Exception($conn->error);
+            }
+            $stmt->bind_param("ii", $followerId, $followedId);
+            $stmt->execute();
+            return true; // Now following
+        }
+    } catch (Exception $e) {
+        error_log("Database error in toggleFollow: " . $e->getMessage());
+        throw new Exception("Failed to process follow request");
     }
 }
 
@@ -335,42 +412,95 @@ function updateUserProfile($userId, $bio, $profilePic = null) {
     }
 }
 
-// Function to check if a user is following another user
-function isFollowing($followerId, $followingId) {
+/**
+ * Get number of followers for a user
+ */
+function getFollowersCount($userId) {
     $conn = getDbConnection();
-    
-    $stmt = $conn->prepare("SELECT id FROM follows WHERE follower_id = ? AND following_id = ?");
-    $stmt->bind_param("ii", $followerId, $followingId);
+    // Changed following_id to followed_id since this gets users who are following this profile
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM follows WHERE followed_id = ?");
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param("i", $userId);
     $stmt->execute();
     $result = $stmt->get_result();
-    
+    $count = $result->fetch_row()[0];
+    return $count;
+}
+
+/**
+ * Get number of users this user is following
+ */
+function getFollowingCount($userId) {
+    $conn = getDbConnection();
+    // This gets the count of users that this profile is following
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM follows WHERE follower_id = ?");
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $count = $result->fetch_row()[0];
+    return $count;
+}
+
+/**
+ * Check if user1 is following user2
+ */
+function isFollowing($followerId, $followedId) {
+    $conn = getDbConnection();
+    $stmt = $conn->prepare("SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?");
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param("ii", $followerId, $followedId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     return $result->num_rows > 0;
 }
 
-// Function to get followers count
-function getFollowersCount($userId) {
+/**
+ * Get followers of a user
+ */
+function getFollowers($userId, $limit = 10) {
     $conn = getDbConnection();
-    
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM follows WHERE following_id = ?");
-    $stmt->bind_param("i", $userId);
+    $stmt = $conn->prepare("
+        SELECT u.* 
+        FROM follows f 
+        JOIN users u ON f.follower_id = u.id 
+        WHERE f.followed_id = ? 
+        ORDER BY f.created_at DESC 
+        LIMIT ?
+    ");
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param("ii", $userId, $limit);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    
-    return $row['count'];
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
-// Function to get following count
-function getFollowingCount($userId) {
+/**
+ * Get users that a user is following
+ */
+function getFollowing($userId, $limit = 10) {
     $conn = getDbConnection();
-    
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM follows WHERE follower_id = ?");
-    $stmt->bind_param("i", $userId);
+    $stmt = $conn->prepare("
+        SELECT u.* 
+        FROM follows f 
+        JOIN users u ON f.followed_id = u.id 
+        WHERE f.follower_id = ? 
+        ORDER BY f.created_at DESC 
+        LIMIT ?
+    ");
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param("ii", $userId, $limit);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    
-    return $row['count'];
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 /**
@@ -494,4 +624,35 @@ function getPostLikesCount($postId) {
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
     return $result['count'];
+}
+
+/**
+ * Get total likes received on all posts by a user
+ */
+function getTotalUserLikes($userId) {
+    try {
+        $conn = getDbConnection();
+        
+        // Simplified query to count all likes on user's posts
+        $sql = "SELECT COUNT(*) as total 
+                FROM likes l 
+                INNER JOIN posts p ON l.post_id = p.id 
+                WHERE p.user_id = ?";
+                
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            error_log("Prepare failed: " . $conn->error);
+            return 0;
+        }
+        
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        return (int)$row['total'];
+    } catch (Exception $e) {
+        error_log("Error getting total likes: " . $e->getMessage());
+        return 0;
+    }
 }

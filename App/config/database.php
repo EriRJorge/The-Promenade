@@ -1,12 +1,12 @@
 <?php
 // Database credentials
-$host = "localhost";
-$username = "root"; // Default for XAMPP
-$password = ""; // Default for XAMPP is empty, change if you set a password
-$database = "promenade";
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');  // Your database username
+define('DB_PASS', '');      // Your database password
+define('DB_NAME', 'promenade'); // Your database name
 
 // Create connection
-$conn = new mysqli($host, $username, $password, $database);
+$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
 // Check connection
 if ($conn->connect_error) {
@@ -17,9 +17,9 @@ if ($conn->connect_error) {
 $conn->set_charset("utf8mb4");
 
 // Create database if it doesn't exist
-$sql = "CREATE DATABASE IF NOT EXISTS " . $database;
+$sql = "CREATE DATABASE IF NOT EXISTS " . DB_NAME;
 if (mysqli_query($conn, $sql)) {
-    $conn = mysqli_connect($host, $username, $password, $database);
+    $conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     
     // Create users table
     $sql = "CREATE TABLE IF NOT EXISTS users (
@@ -96,4 +96,7 @@ if (mysqli_query($conn, $sql)) {
 } else {
     echo "Error creating database: " . mysqli_error($conn);
 }
+
+error_log("POST data: " . print_r($_POST, true));
+error_log("Current user ID: " . getCurrentUserId());
 ?>

@@ -12,11 +12,17 @@ if (!isLoggedIn()) {
 
 $userId = getCurrentUserId();
 $username = getCurrentUsername();
+$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$limit = 10;
+$offset = ($page - 1) * $limit;
 
 // Get feed posts
-$limit = 10;
-$offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
-$posts = getFeedPosts($userId, $limit, $offset);
+try {
+    $posts = getFeedPosts($userId, $limit, $offset);
+} catch (Exception $e) {
+    error_log("Error getting feed: " . $e->getMessage());
+    $posts = [];
+}
 
 // Include header
 $pageTitle = "Dashboard";
@@ -58,7 +64,7 @@ include 'includes/header.php';
                             <span><?php echo $post['comments_count']; ?></span> comments
                         </div>
                         
-                        <div class="actions">
+                        <div class="actions">   
                             <button class="like-button" data-post-id="<?php echo $post['id']; ?>">
                                 <?php echo $post['user_liked'] ? 'Unlike' : 'Like'; ?>
                             </button>
@@ -72,11 +78,11 @@ include 'includes/header.php';
         <!-- Pagination -->
         <div class="pagination">
             <?php if ($offset > 0): ?>
-                <a href="dashboard.php?offset=<?php echo max(0, $offset - $limit); ?>" class="button">Previous</a>
+                <a href="dashboard.php?page=<?php echo max(1, $page - 1); ?>" class="button">Previous</a>
             <?php endif; ?>
             
             <?php if (count($posts) == $limit): ?>
-                <a href="dashboard.php?offset=<?php echo $offset + $limit; ?>" class="button">Next</a>
+                <a href="dashboard.php?page=<?php echo $page + 1; ?>" class="button">Next</a>
             <?php endif; ?>
         </div>
     <?php else: ?>
