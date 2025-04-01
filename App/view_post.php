@@ -30,7 +30,7 @@ $comments = getCommentsByPostId($postId);
  * Function to get a single post by ID
  */
 function getPostById($postId) {
-    $conn = getDbConnection();
+    global $conn; // Use existing database connection
     $stmt = $conn->prepare("SELECT p.*, u.username, u.profile_pic FROM posts p JOIN users u ON p.user_id = u.id WHERE p.id = ?");
     $stmt->bind_param("i", $postId);
     $stmt->execute();

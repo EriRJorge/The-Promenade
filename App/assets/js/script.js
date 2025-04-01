@@ -257,6 +257,35 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
+
+    // Character count functionality
+    const textarea = document.getElementById('postContent');
+    const charCount = document.getElementById('charCount');
+    
+    if (textarea && charCount) {
+        textarea.addEventListener('input', function() {
+            const remaining = this.value.length;
+            charCount.textContent = remaining;
+            
+            const charCountDiv = charCount.parentElement;
+            if (remaining >= 90) {
+                charCountDiv.classList.add('limit-close');
+            } else {
+                charCountDiv.classList.remove('limit-close');
+            }
+            
+            if (remaining === 100) {
+                charCountDiv.classList.add('limit-reached');
+            } else {
+                charCountDiv.classList.remove('limit-reached');
+            }
+            
+            // Prevent further input if limit is reached
+            if (this.value.length > 100) {
+                this.value = this.value.substring(0, 100);
+            }
+        });
+    }
 });
 
 // Feedback message function
@@ -295,3 +324,111 @@ function showNotification(message, type = 'info') {
         console.log(message);
     }
 }
+
+// Header image upload functionality
+function openHeaderUpload() {
+    document.getElementById('headerUploadModal').classList.add('active');
+}
+
+function closeHeaderUpload() {
+    document.getElementById('headerUploadModal').classList.remove('active');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const headerUploadForm = document.getElementById('headerUploadForm');
+    const headerImageInput = document.getElementById('headerImage');
+    const imagePreview = document.getElementById('imagePreview');
+
+    if (headerImageInput) {
+        headerImageInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                // Validate file size
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File is too large. Maximum size is 5MB.');
+                    this.value = '';
+                    return;
+                }
+
+                // Validate file type
+                const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Invalid file type. Only JPG, PNG and GIF are allowed.');
+                    this.value = '';
+                    return;
+                }
+
+                // Preview image
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (headerUploadForm) {
+        headerUploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitButton = this.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Uploading...';
+
+            try {
+                const formData = new FormData();
+                const file = headerImageInput.files[0];
+                
+                if (!file) {
+                    throw new Error('Please select an image first');
+                }
+
+                formData.append('header_image', file);
+
+                const response = await fetch('update_header.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // Log the raw response for debugging
+                const responseText = await response.text();
+                console.log('Raw server response:', responseText);
+
+                // Try to parse the response as JSON
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    console.error('Failed to parse JSON:', e);
+                    throw new Error('Server returned invalid response');
+                }
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to update header image');
+                }
+
+                // Update header image
+                const headerImg = document.querySelector('.profile-header-image');
+                if (headerImg) {
+                    headerImg.src = data.data.image_url;
+                } else {
+                    const newHeaderImg = document.createElement('img');
+                    newHeaderImg.src = data.data.image_url;
+                    newHeaderImg.className = 'profile-header-image';
+                    document.querySelector('.profile-header').prepend(newHeaderImg);
+                }
+                
+                closeHeaderUpload();
+                alert('Header image updated successfully');
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert(error.message || 'An error occurred while updating the header image');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Save Changes';
+            }
+        });
+    }
+});

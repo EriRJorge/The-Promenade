@@ -656,3 +656,58 @@ function getTotalUserLikes($userId) {
         return 0;
     }
 }
+
+function validatePost($content) {
+    if (strlen($content) > 100) {
+        return false;
+    }
+    return true;
+}
+
+function getProfileHeaderImage($userId) {
+    try {
+        $conn = getDbConnection();
+        
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
+
+        $stmt = $conn->prepare("
+            SELECT header_image 
+            FROM users 
+            WHERE id = ?
+        ");
+        
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        return $row['header_image'] ?? 'assets/images/default-header.jpg';
+    } catch (Exception $e) {
+        error_log("Error getting header image: " . $e->getMessage());
+        return 'assets/images/default-header.jpg';
+    }
+}
+
+function updateProfileHeaderImage($userId, $headerImage) {
+    try {
+        $conn = getDbConnection();
+        
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
+
+        $stmt = $conn->prepare("
+            UPDATE users 
+            SET header_image = ? 
+            WHERE id = ?
+        ");
+        
+        $stmt->bind_param("si", $headerImage, $userId);
+        return $stmt->execute();
+    } catch (Exception $e) {
+        error_log("Error updating header image: " . $e->getMessage());
+        return false;
+    }
+}

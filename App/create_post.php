@@ -73,9 +73,11 @@ include 'includes/header.php';
 
 <form action="create_post.php" method="POST" enctype="multipart/form-data" class="post-form">
     <div class="form-group">
-        <label for="content">Content (Max 100 words):</label>
-        <textarea id="content" name="content" rows="4" required></textarea>
-        <div id="word-count" class="word-count">0/100 words</div>
+        <textarea name="content" id="postContent" maxlength="100" required 
+            placeholder="What's on your mind? (100 characters max)"></textarea>
+        <div class="character-count">
+            <span id="charCount">0</span>/100 characters
+        </div>
     </div>
     
     <div class="form-group">
@@ -90,17 +92,17 @@ include 'includes/header.php';
 
 <script>
     // Word counter script
-    const contentTextarea = document.getElementById('content');
-    const wordCountDisplay = document.getElementById('word-count');
+    const contentTextarea = document.getElementById('postContent');
+    const charCountDisplay = document.getElementById('charCount');
     
     contentTextarea.addEventListener('input', function() {
-        const wordCount = this.value.trim() ? this.value.trim().split(/\s+/).length : 0;
-        wordCountDisplay.textContent = `${wordCount}/100 words`;
+        const charCount = this.value.length;
+        charCountDisplay.textContent = `${charCount}/100 characters`;
         
-        if (wordCount > 100) {
-            wordCountDisplay.classList.add('error');
+        if (charCount > 100) {
+            charCountDisplay.classList.add('error');
         } else {
-            wordCountDisplay.classList.remove('error');
+            charCountDisplay.classList.remove('error');
         }
     });
 </script>
